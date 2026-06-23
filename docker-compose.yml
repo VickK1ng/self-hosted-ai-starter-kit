@@ -7,9 +7,17 @@ volumes:
 networks:
   demo:
 
-x-n8n: &service-n8n
-  image: n8nio/n8n:latest
+# Shared defaults: network and restart policy for long-running services
+x-service-defaults: &service-defaults
   networks: ['demo']
+  restart: unless-stopped
+
+# ROCm image for AMD GPU support, referenced by both ollama and init services
+x-rocm-image: &rocm-image ollama/ollama:rocm
+
+x-n8n: &service-n8n
+  <<: *service-defaults
+  image: n8nio/n8n:latest
   environment:
     - DB_TYPE=postgresdb
     - DB_POSTGRESDB_HOST=postgres
@@ -24,21 +32,19 @@ x-n8n: &service-n8n
     - postgres
 
 x-ollama: &service-ollama
+  <<: *service-defaults
   image: ollama/ollama:latest
   container_name: ollama
-  networks: ['demo']
-  restart: unless-stopped
   ports:
     - 11434:11434
   volumes:
     - ollama_storage:/root/.ollama
 
 x-init-ollama: &init-ollama
-  image: ollama/ollama:latest
-  networks: ['demo']
+  <<: *service-ollama
   container_name: ollama-pull-llama
-  volumes:
-    - ollama_storage:/root/.ollama
+  restart: "no"
+  ports: []
   entrypoint: /bin/sh
   command:
     - "-c"
@@ -46,9 +52,8 @@ x-init-ollama: &init-ollama
 
 services:
   postgres:
+    <<: *service-defaults
     image: postgres:16-alpine
-    networks: ['demo']
-    restart: unless-stopped
     environment:
       - POSTGRES_USER
       - POSTGRES_PASSWORD
@@ -64,6 +69,7 @@ services:
   n8n-import:
     <<: *service-n8n
     container_name: n8n-import
+    restart: "no"
     entrypoint: /bin/sh
     command:
       - "-c"
@@ -77,7 +83,6 @@ services:
   n8n:
     <<: *service-n8n
     container_name: n8n
-    restart: unless-stopped
     ports:
       - 5678:5678
     volumes:
@@ -91,10 +96,9 @@ services:
         condition: service_completed_successfully
 
   qdrant:
+    <<: *service-defaults
     image: qdrant/qdrant
     container_name: qdrant
-    networks: ['demo']
-    restart: unless-stopped
     ports:
       - 6333:6333
     volumes:
@@ -118,7 +122,7 @@ services:
   ollama-gpu-amd:
     profiles: ["gpu-amd"]
     <<: *service-ollama
-    image: ollama/ollama:rocm
+    image: *rocm-image
     devices:
       - "/dev/kfd"
       - "/dev/dri"
@@ -138,6 +142,6 @@ services:
   ollama-pull-llama-gpu-amd:
     profiles: [gpu-amd]
     <<: *init-ollama
-    image: ollama/ollama:rocm
+    image: *rocm-image
     depends_on:
      - ollama-gpu-amd
