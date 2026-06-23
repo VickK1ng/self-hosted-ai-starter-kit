@@ -4,3 +4,20 @@ __pycache__/
 .coverage
 htmlcov/
 .pytest_cache/
+
+# Environment variables (may contain secrets)
+.env
+
+# Shared data directory
+shared/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor files
+*.swp
+*.swo
+*~
+.vscode/
+.idea/
